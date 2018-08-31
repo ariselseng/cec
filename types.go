@@ -89,6 +89,15 @@ const (
 	PowerStatusStandbyTransition PowerStatus = 0x03
 )
 
+// Representation of StatusRequest in GiveDeckStatus
+type DeckStatusRequest byte
+
+const (
+	DeckStatusOn   DeckStatusRequest = 0x01
+	DeckStatusOff  DeckStatusRequest = 0x02
+	DeckStatusOnce DeckStatusRequest = 0x02
+)
+
 // Representation of an HDMI CEC opcode.
 type OpCode byte
 

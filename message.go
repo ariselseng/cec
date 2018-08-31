@@ -14,9 +14,7 @@
 
 package cec
 
-import (
-	"fmt"
-)
+import "fmt"
 
 type IncorrectPacketDataLength struct {
 	expected int
@@ -131,7 +129,10 @@ type (
 	SetOSDName struct {
 		Name string // The OSD name, must be 1 to 14 ASCII characters.
 	}
-
+	// Request from TV about status from device
+	GiveDeckStatus struct {
+		StatusRequest DeckStatusRequest
+	}
 	// Sets the system audio mode for this device. This is usually used in response to SystemAudioModeRequest, but can
 	// be send outside of a reply as well.
 	SetSystemAudioMode struct {
@@ -203,9 +204,19 @@ type (
 	Standby struct {
 		emptyCommand
 	}
+	// RoutingChange informs of new routing
+	RoutingChange struct {
+		OriginalAddr PhysicalAddress
+		NewAddr      PhysicalAddress
+	}
 
-	// TODO: Not yet implemented.
+	// Reports that the source is active
 	ActiveSource struct {
+		Addr PhysicalAddress
+	}
+
+	//  Used by a new device to discover the status of the system
+	RequestActiveSource struct {
 		emptyCommand
 	}
 
@@ -217,8 +228,27 @@ type (
 
 func unmarshalCommand(op OpCode, data []byte) (Command, error) {
 	switch op {
+	case OpRequestActiveSource:
+		return RequestActiveSource{}, nil
+
+	case OpGiveDeckStatus:
+		if len(data) != 1 {
+			return nil, IncorrectPacketDataLength{1, len(data)}
+		}
+		return GiveDeckStatus{
+			StatusRequest: DeckStatusRequest(data[0]),
+		}, nil
+
 	case OpActiveSource:
-		return ActiveSource{}, nil
+		return ActiveSource{
+			Addr: PhysicalAddress(int(data[0]) << 8),
+		}, nil
+
+	case OpRoutingChange:
+		return RoutingChange{
+			OriginalAddr: PhysicalAddress(int(data[0]) << 8),
+			NewAddr:      PhysicalAddress(int(data[2]) << 8),
+		}, nil
 
 	case OpFeatureAbort:
 		if len(data) != 2 {
@@ -370,6 +400,8 @@ func MakeUnknownCmd(op OpCode, data []byte) UnkownCmd {
 
 func (c UnkownCmd) Op() OpCode                 { return c.op }
 func (c ActiveSource) Op() OpCode              { return OpActiveSource }
+func (c RequestActiveSource) Op() OpCode       { return OpRequestActiveSource }
+func (c RoutingChange) Op() OpCode             { return OpRoutingChange }
 func (c FeatureAbort) Op() OpCode              { return OpFeatureAbort }
 func (c ReportPhysicalAddress) Op() OpCode     { return OpReportPhysicalAddress }
 func (c ReportAudioStatus) Op() OpCode         { return OpReportAudioStatus }
@@ -377,6 +409,7 @@ func (c ReportPowerStatus) Op() OpCode         { return OpReportPowerStatus }
 func (c SetOSDName) Op() OpCode                { return OpSetOSDName }
 func (c SetSystemAudioMode) Op() OpCode        { return OpSetSystemAudioMode }
 func (c GiveOSDName) Op() OpCode               { return OpGiveOSDName }
+func (c GiveDeckStatus) Op() OpCode            { return OpGiveDeckStatus }
 func (c GiveDevicePowerStatus) Op() OpCode     { return OpGiveDevicePowerStatus }
 func (c GiveDeviceVendorID) Op() OpCode        { return OpGiveDeviceVendorID }
 func (c GivePhysicalAddress) Op() OpCode       { return OpGivePhysicalAddress }
@@ -401,6 +434,16 @@ func (c FeatureAbort) Marshal() ([]byte, error) {
 
 func (c ReportPhysicalAddress) Marshal() ([]byte, error) {
 	return append(c.Addr.Bytes(), byte(c.Type)), nil
+}
+func (c ActiveSource) Marshal() ([]byte, error) {
+	return append(c.Addr.Bytes()), nil
+}
+func (c GiveDeckStatus) Marshal() ([]byte, error) { return []byte{byte(c.StatusRequest)}, nil }
+
+func (c RequestActiveSource) Marshal() ([]byte, error) { return []byte{}, nil }
+
+func (c RoutingChange) Marshal() ([]byte, error) {
+	return append(c.OriginalAddr.Bytes(), c.NewAddr.Bytes()...), nil
 }
 
 func (c ReportAudioStatus) Marshal() ([]byte, error) {
